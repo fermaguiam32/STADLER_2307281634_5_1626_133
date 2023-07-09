@@ -113,8 +113,7 @@ def printSolution(solution):
 
 if __name__ == "__main__":
 	# Read tests from the file
-	###############################tests = readTests("test2run.txt")
-	tests = readTests("test2run2_2.txt")
+	tests = readTests("test2run2.txt")
 
 	for test in tests:
 		# Read inputs for the test inputs
