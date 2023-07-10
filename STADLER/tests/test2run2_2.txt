@@ -1,4 +1,4 @@
-# instanceName | maxTime | nIter | distCrit | betaMin | betaMax | distCand | betaMin2 | betaMax2 | seed | project
+# instanceName | maxTime | nIter | distCrit | betaMin | betaMax | distCand | betaMin2 | betaMax2 | seed
 j30/j301_1.sm	60	100000000	u	1	1	g	0.3	0.4	5812866	1
 j30/j301_2.sm	60	100000000	u	1	1	g	0.3	0.4	5812867	1
 j30/j301_3.sm	60	100000000	u	1	1	g	0.3	0.4	5812868	1

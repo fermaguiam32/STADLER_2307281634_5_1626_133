@@ -55,8 +55,6 @@ def TORA_Heuristic(inputs, test):
 	# directed edge (u, v) from vertex u to vertex v, u comes before v in the ordering
 	sorted_tasks = topological_sort(inputs.tasks)
 
-	# Loop over the tasks in topological order
-	for task in sorted_tasks:
 		# Calculate earliest start time for task considering predecessor dependencies
 		earliest_start_time = 0
 		for pred_id, extra_time in task.predecessors.items():
