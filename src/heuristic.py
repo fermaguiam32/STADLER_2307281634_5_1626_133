@@ -1,13 +1,68 @@
 #!/usr/bin/env python3
 
 import sys
+from numpy import isfinite
 import pandas as pd
 import glob
 from inputs import readTests, readInputs
 from objects import Solution	
 
+# Para las permutaciones
+from itertools import permutations
 
-def topological_sort(tasks):
+# Para el tiempo
+import time
+
+
+
+# ITERATED LOCAL SEARCH
+def ILS(inputs, test):
+	print("\nILS")
+
+	# Sum tasks fungible resources usage
+	resources_sum = {resource.id: 0 for resource in inputs.resources if resource.type == "Fisico"}
+	for task in inputs.tasks:
+		for resource_id, units in task.resources.items():
+			if resource_id in resources_sum:
+				resources_sum[resource_id] += units
+
+	# Check the availability of the fungible resources
+	resources_availability = {resource.id: resource.units for resource in inputs.resources}
+	for resource_id, units in resources_sum.items():
+		if resources_availability[resource_id] < units:
+			sys.exit(f"[ERROR]: Insufficient units of resource {resource_id}")
+	
+	solution = TORA_Heuristic(inputs, test)
+	print("\nILS_solution=")#,solution.tasks)
+	return solution
+
+
+"""
+Topological Ordering and Resource Allocation (TORA) heuristic.
+"""
+def TORA_Heuristic(inputs, test):
+	print("\nTORA_HEURISTIC")
+	# solution = Solution()
+
+	# Topologically sort the tasks
+	sorted_tasks = topological_sort(inputs.tasks, inputs)
+   
+	# print("SORTED_TASKS",sorted_tasks)
+
+	##################### ¿ NO ES NECESARIO ? #########################
+	solution = sorted_tasks_timming_loop(sorted_tasks, inputs)
+	# base_solution = solution
+
+	solution = local_search(solution, sorted_tasks, inputs)
+
+	# solution = sorted_tasks_timming_loop(sorted_tasks, resources_availability, resources_used, inputs)
+	
+	print("\nTORA_solution=")#,solution.tasks)
+	return solution
+
+
+def topological_sort(tasks, inputs):
+	print("\nTOPOLOGICAL_SORT")
 	in_degree = {task.id: len(task.predecessors) for task in tasks}
 	queue = [task for task in tasks if in_degree[task.id] == 0]
 	sorted_tasks = []
@@ -26,40 +81,84 @@ def topological_sort(tasks):
 	if any(in_degree.values()):
 		raise ValueError("The input graph contains a cycle")
 
+	print("\nTopological_sort_sorted_tasks=")#,sorted_tasks)
 	return sorted_tasks
 
-"""
-Topological Ordering and Resource Allocation (TORA) heuristic.
-"""
-def TORA_Heuristic(inputs, test):
-	solution = Solution()
 
-	# Initialize resources availability
-	resources_availability = {resource.id: resource.units for resource in inputs.resources}
+
+def local_search(solution, sorted_tasks, inputs):
+	print("\nLOCAL_SEARCH(SOLUTION,...):")
+	new_solution = solution
+	solutions_found = 0
+	best_sorted_tasks = sorted_tasks.copy()  # Copiar la lista inicial de sorted_tasks
+
+	successors_db = pd.read_excel("Successors_All.xlsx")
+	# Hasta no encontrar mejoras
+	reps = 0
+	new_sorted_tasks = best_sorted_tasks.copy()
+	while reps < 50:
+		for unoptimized_task in solution.tasks[len(solution.tasks) - 1:0:-1]:
+			i = solution.tasks.index(unoptimized_task)
+			# Crear una nueva lista de tareas para la iteración actual
+			for prev_sorted_tasks in range(i, 0, -1):
+				print("\t\t\t",reps)
+				print("\t\t\t\t",i)
+				val1 = new_sorted_tasks[prev_sorted_tasks - 1].label
+				val2 = new_sorted_tasks[prev_sorted_tasks].label
+				val1_p = new_sorted_tasks[prev_sorted_tasks - 1].project
+				val2_p = new_sorted_tasks[prev_sorted_tasks].project
+
+				print("¿[P{:s},T{:s}] <> [P{:s},T{:s}]?\n".format(str(val1_p), str(val1), str(val2_p), str(val2)))
+
+				# Filtrar los casos en los que task no aparezca en los sucesores de la fila en la que el "ID" sea igual a prev_sorted_tasks - 1
+				# print(new_sorted_tasks[prev_sorted_tasks - 1].id)
+				val1_successors = successors_db.loc[successors_db["ID"] == new_sorted_tasks[prev_sorted_tasks - 1].id, "Successors"].values[0]
+				if str(new_sorted_tasks[prev_sorted_tasks].id) not in val1_successors.split():
+					print("########## BestSolution? ######################################################")
+					# Intercambiar las tareas si cumple la condición
+					aux = new_sorted_tasks[prev_sorted_tasks]
+					new_sorted_tasks[prev_sorted_tasks] = new_sorted_tasks[prev_sorted_tasks - 1]
+					new_sorted_tasks[prev_sorted_tasks - 1] = aux
+
+					# Ejecutar el algoritmo TORA actualizado con la nueva lista de tareas
+					new_solution = sorted_tasks_timming_loop(new_sorted_tasks, inputs)
+					print("new_solution.cost= ",new_solution.cost)
+
+					print("solution.cost= ",solution.cost) 
+					if new_solution.cost < solution.cost:
+						print("############################ BestSolution! ####################################")
+						solution = new_solution
+						solutions_found += 1
+						# optimizing = True
+				else:
+					break
+				print("\t\t\t\t\t",solution.cost)
+				print("\t\t\t\t\t\t",new_solution.cost)
+
+			# Verificar si se ha encontrado una mejor solución en la iteración actual
+			if new_solution.cost < solution.cost:
+				solution = new_solution
+				solutions_found += 1
+			# else:
+			# 	break
+		reps = reps + 1
+	return solution
+
+
+
+
+
+
+def sorted_tasks_timming_loop(sorted_tasks, inputs):
+	print("\nSORTED_TASKS_TIMMING_LOOP")
+	solution = Solution()
+	# current_tasks_times = {}
+	# print(sorted_tasks)
+	# print(len(sorted_tasks))
 
 	# Initialize dictionary to keep track of resources used by each task
+	resources_availability = {resource.id: resource.units for resource in inputs.resources}
 	resources_used = {task.id: set() for task in inputs.tasks}
-
-	# Sum tasks fungible resources usage
-	resources_sum = {resource.id: 0 for resource in inputs.resources if resource.type == "Fisico"}
-	for task in inputs.tasks:
-		for resource_id, units in task.resources.items():
-			if resource_id in resources_sum:
-				resources_sum[resource_id] += units
-
-	# Check the availability of the fungible resources
-	for resource_id, units in resources_sum.items():
-		# print(f"resources_availability[{resource_id}]=")
-		# print(resources_availability[resource_id])
-		# print("units=")
-		# print(units)
-		if resources_availability[resource_id] < units:
-			sys.exit(f"[ERROR]: Insufficient units of resource {resource_id}")
-
-	# Topologically sort the tasks. A topological sort is an algorithm that takes a directed
-	# graph and returns a linear ordering of its vertices (nodes) such that, for every
-	# directed edge (u, v) from vertex u to vertex v, u comes before v in the ordering
-	sorted_tasks = topological_sort(inputs.tasks)
 
 	# Loop over the tasks in topological order
 	for task in sorted_tasks:
@@ -73,6 +172,7 @@ def TORA_Heuristic(inputs, test):
 			else:
 				# Add extra time to the starting time of predecessor
 				earliest_start_time = max(earliest_start_time, pred_task.start_time + abs(extra_time))
+		
 
 		# Refine earliest start time for task considering resource availability
 		for resource_id, units in task.resources.items():
@@ -82,7 +182,7 @@ def TORA_Heuristic(inputs, test):
 				assigned_tasks = [inputs.tasks[task_id] for task_id, _ in resource.assigned_tasks.items()]
 				assigned_tasks.sort(key=lambda t: t.finish_time)
 				# Iterate assigned tasks and update resources
-				while resources_availability[resource_id] < units:
+				while assigned_tasks and resources_availability[resource_id] < units:
 					assigned_task = assigned_tasks.pop(0)
 					# Release non-fungible resources used by task
 					for rel_resource_id in resources_used[assigned_task.id]:
@@ -108,38 +208,38 @@ def TORA_Heuristic(inputs, test):
 				resources_used[task.id].add(resource_id)
 		# Add task to project schedule
 		solution.tasks.append(task)
-		# for task in solution.tasks:
-		# 	task.project = project
-	solution.cost = task.finish_time
+		solution.tasks_times[task.id] = (task.start_time, task.finish_time)
+
+		solution.cost = max(solution.cost, task.finish_time)
+		solution.start_time = task.start_time
 	return solution
 
+
+
 def printSolution(solution):
-	print("{:s}".format("\n".join(str(task) for task in solution.tasks)))
+	print("\nPRINT_SOLUTION")
+	for task in solution.tasks:
+		# Start time:{self.start_time}\tEnd time:{self.finish_time#####################
+		tupla = solution.tasks_times[task.id]
+		print("{:s}, t({:d}-{:d})".format(str(task), tupla[0], tupla[1]))
 	print("Cost: {:.2f}".format(solution.cost))
 	print("Time: {:.2f}\n".format(solution.time))
+	# print(solution.tasks)
 
-#########################################################
-# Listo las dependencias de cada tarea###################
-def get_dependencies(tasks, task_id):####################
-    dependencies = set()#################################
-    # Obtener las dependencias directas de la tarea actual
-    task = tasks[task_id]################################
-    dependencies.update(task.predecessors.keys())########
-    # Obtener las dependencias de las dependencias#######
-    for dependency in task.predecessors.keys():##########
-        dependencies.update(get_dependencies(tasks, dependency))
-    return dependencies##################################
-#########################################################
+
 
 if __name__ == "__main__":
+	print("MAIN")
 	# Read tests from the file
 	tests = readTests("test2run2.txt")
 
 	for test in tests:
 		# Read inputs for the test inputs
 		inputs = readInputs(test.instanceName)
-
+		
 		# Calculate solution for the given scenario
-		solution = TORA_Heuristic(inputs, test)
+		# solution = TORA_Heuristic(inputs, test)
+		solution = ILS(inputs, test)
+		
 		#print("OBD {:s}".format(test.instanceName))
 		printSolution(solution)
