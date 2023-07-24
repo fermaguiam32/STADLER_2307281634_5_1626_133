@@ -1,6 +1,6 @@
 # instanceName | maxTime | nIter | distCrit | betaMin | betaMax | distCand | betaMin2 | betaMax2 | seed
-STADLER Loc Type I	60	100000000	u	1	1	g	0.3	0.4	5812866
-# STADLER Loc Type I	60	100000000	u	1	1	g	0.3	0.4	756614
+# STADLER	60	100000000	u	1	1	g	0.3	0.4	5812866
+# STADLER Loc Type I	60	100000000	u	1	2	g	0.3	0.4	756614
 # STADLER Loc Type I	60	100000000	u	1	1	g	0.3	0.4	7273657
 # STADLER Loc Type I	60	100000000	u	1	1	g	0.3	0.4	6288150
 # STADLER Loc Type I	60	100000000	u	1	1	g	0.3	0.4	9002721
