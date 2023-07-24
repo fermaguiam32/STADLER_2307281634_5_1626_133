@@ -7,6 +7,7 @@ import glob
 from inputs import readTests, readInputs
 from objects import Solution	
 
+import numpy as np
 # Para las permutaciones
 from itertools import permutations
 
@@ -16,7 +17,7 @@ import time
 
 
 # ITERATED LOCAL SEARCH
-def ILS(inputs, test):
+def ILS(inputs, test, rng):
 	print("\nILS")
 
 	# Sum tasks fungible resources usage
@@ -32,7 +33,7 @@ def ILS(inputs, test):
 		if resources_availability[resource_id] < units:
 			sys.exit(f"[ERROR]: Insufficient units of resource {resource_id}")
 	
-	solution = TORA_Heuristic(inputs, test)
+	solution = TORA_Heuristic(inputs, rng)
 	print("\nILS_solution=")#,solution.tasks)
 	return solution
 
@@ -40,7 +41,7 @@ def ILS(inputs, test):
 """
 Topological Ordering and Resource Allocation (TORA) heuristic.
 """
-def TORA_Heuristic(inputs, test):
+def TORA_Heuristic(inputs, rng):
 	print("\nTORA_HEURISTIC")
 	# solution = Solution()
 
@@ -53,7 +54,7 @@ def TORA_Heuristic(inputs, test):
 	solution = sorted_tasks_timming_loop(sorted_tasks, inputs)
 	# base_solution = solution
 
-	solution = local_search(solution, sorted_tasks, inputs)
+	solution = local_search(solution, sorted_tasks, inputs, rng)
 
 	# solution = sorted_tasks_timming_loop(sorted_tasks, resources_availability, resources_used, inputs)
 	
@@ -86,20 +87,31 @@ def topological_sort(tasks, inputs):
 
 
 
-def local_search(solution, sorted_tasks, inputs):
+def local_search(solution, sorted_tasks, inputs, rng):
 	print("\nLOCAL_SEARCH(SOLUTION,...):")
 	new_solution = solution
 	solutions_found = 0
 	best_sorted_tasks = sorted_tasks.copy()  # Copiar la lista inicial de sorted_tasks
 
 	successors_db = pd.read_excel("Successors_All.xlsx")
-	# Hasta no encontrar mejoras
+	# Hasta no encontrar mejoras/reps
 	reps = 0
 	new_sorted_tasks = best_sorted_tasks.copy()
-	while reps < 50:
-		for unoptimized_task in solution.tasks[len(solution.tasks) - 1:0:-1]:
+	# Bucle general con N iteraciones
+	while reps < 99:
+		unoptimized_tasks = rng.choice(solution.tasks, inputs.nTasks, replace = False)
+		# Bucle con una iteración por cada tarea
+		for unoptimized_task in unoptimized_tasks: # reversed(solution.tasks): # solution.tasks[len(solution.tasks) - 1:0:-1]: #REVERSED##########################
 			i = solution.tasks.index(unoptimized_task)
-			# Crear una nueva lista de tareas para la iteración actual
+			
+			# Crear una nueva lista de tareas que modificar en la iteración
+			new_sorted_tasks = solution.tasks.copy()
+			
+			acceptedUnimprovements = 0
+			# print(new_sorted_tasks[i].id, solution.tasks[i].id)
+			# assert new_sorted_tasks[i] == solution.tasks[i]
+			
+			# Bucle para hacer, si es posible, el ShiftToLeft
 			for prev_sorted_tasks in range(i, 0, -1):
 				print("\t\t\t",reps)
 				print("\t\t\t\t",i)
@@ -108,11 +120,13 @@ def local_search(solution, sorted_tasks, inputs):
 				val1_p = new_sorted_tasks[prev_sorted_tasks - 1].project
 				val2_p = new_sorted_tasks[prev_sorted_tasks].project
 
+
 				print("¿[P{:s},T{:s}] <> [P{:s},T{:s}]?\n".format(str(val1_p), str(val1), str(val2_p), str(val2)))
 
 				# Filtrar los casos en los que task no aparezca en los sucesores de la fila en la que el "ID" sea igual a prev_sorted_tasks - 1
 				# print(new_sorted_tasks[prev_sorted_tasks - 1].id)
 				val1_successors = successors_db.loc[successors_db["ID"] == new_sorted_tasks[prev_sorted_tasks - 1].id, "Successors"].values[0]
+				
 				if str(new_sorted_tasks[prev_sorted_tasks].id) not in val1_successors.split():
 					print("########## BestSolution? ######################################################")
 					# Intercambiar las tareas si cumple la condición
@@ -130,10 +144,26 @@ def local_search(solution, sorted_tasks, inputs):
 						solution = new_solution
 						solutions_found += 1
 						# optimizing = True
+					else:
+						if acceptedUnimprovements < 2:#len(new_sorted_tasks):
+							i += 1
+							acceptedUnimprovements += 1
+						else:
+							for a in range (acceptedUnimprovements-1):
+								acceptedUnimprovements -= 1
+								# Intercambiar las tareas si cumple la condición
+								aux = new_sorted_tasks[prev_sorted_tasks]
+								new_sorted_tasks[prev_sorted_tasks] = new_sorted_tasks[prev_sorted_tasks - 1]
+								new_sorted_tasks[prev_sorted_tasks - 1] = aux
+					# 	# Intercambiar las tareas si cumple la condición
+					# 	aux = new_sorted_tasks[prev_sorted_tasks]
+					# 	new_sorted_tasks[prev_sorted_tasks] = new_sorted_tasks[prev_sorted_tasks - 1]
+					# 	new_sorted_tasks[prev_sorted_tasks - 1] = aux
 				else:
 					break
 				print("\t\t\t\t\t",solution.cost)
 				print("\t\t\t\t\t\t",new_solution.cost)
+				print("\t\t\t\t\t\t\t\t",acceptedUnimprovements)
 
 			# Verificar si se ha encontrado una mejor solución en la iteración actual
 			if new_solution.cost < solution.cost:
@@ -236,10 +266,11 @@ if __name__ == "__main__":
 	for test in tests:
 		# Read inputs for the test inputs
 		inputs = readInputs(test.instanceName)
+		rng = np.random.default_rng(test.seed)
 		
 		# Calculate solution for the given scenario
 		# solution = TORA_Heuristic(inputs, test)
-		solution = ILS(inputs, test)
+		solution = ILS(inputs, test, rng)
 		
 		#print("OBD {:s}".format(test.instanceName))
 		printSolution(solution)
